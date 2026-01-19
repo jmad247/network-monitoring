@@ -1,0 +1,86 @@
+groups:
+  - name: network_alerts
+    rules:
+      # Device down alert
+      - alert: DeviceDown
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Device {{ $labels.instance }} is down"
+          description: "{{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      # High latency alert
+      - alert: HighLatency
+        expr: probe_icmp_duration_seconds > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency to {{ $labels.instance }}"
+          description: "Latency to {{ $labels.instance }} is {{ $value }}s (>100ms for 5min)."
+
+      # SNMP target down
+      - alert: SNMPTargetDown
+        expr: up{job="snmp-mikrotik"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SNMP target {{ $labels.instance }} is down"
+          description: "Cannot reach SNMP on {{ $labels.instance }}."
+
+  - name: host_alerts
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}."
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}."
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }} mount {{ $labels.mountpoint }}."
+
+  - name: mikrotik_alerts
+    rules:
+      # High interface utilization
+      - alert: HighInterfaceUtilization
+        expr: rate(ifHCInOctets[5m]) * 8 > 800000000  # 800 Mbps
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High bandwidth on {{ $labels.ifName }}"
+          description: "Interface {{ $labels.ifName }} on {{ $labels.instance }} is using high bandwidth."
+
+      # Interface errors
+      - alert: InterfaceErrors
+        expr: rate(ifInErrors[5m]) > 0 or rate(ifOutErrors[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Interface errors on {{ $labels.ifName }}"
+          description: "Errors detected on {{ $labels.ifName }} on {{ $labels.instance }}."
