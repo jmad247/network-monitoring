@@ -1,38 +1,47 @@
+# Prometheus Configuration for Home Lab Network Monitoring
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    monitor: 'home-network'
 
+# Alerting configuration
 alerting:
   alertmanagers:
     - static_configs:
-        - targets:
-          - alertmanager:9093
+        - targets: ['alertmanager:9093']
 
+# Alert rules
 rule_files:
   - /etc/prometheus/alerts.yml
 
+# Scrape configurations
 scrape_configs:
-  # Prometheus self-monitoring
+  # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # Node Exporter - Linux host metrics
-  - job_name: 'node-exporter'
+  # Node Exporter - Admin Workstation
+  - job_name: 'workstation'
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
-          instance: 'docker-host'
+          instance: 'admin-desktop'
+          ip: '192.168.10.194'
 
-  # SNMP Exporter - MikroTik
-  - job_name: 'snmp-mikrotik'
+  # MikroTik CRS309 via SNMP
+  - job_name: 'mikrotik-snmp'
     static_configs:
       - targets:
-        - 192.168.88.1  # MikroTik IP
+          - 192.168.10.1
+        labels:
+          device: 'crs309'
+          type: 'switch'
     metrics_path: /snmp
     params:
-      module: [mikrotik]
-      auth: [monitoring_v2]
+      module: [if_mib]
+      auth: [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -41,16 +50,19 @@ scrape_configs:
       - target_label: __address__
         replacement: snmp-exporter:9116
 
-  # Blackbox Exporter - Endpoint monitoring
-  - job_name: 'blackbox-icmp'
+  # Blackbox Exporter - ICMP ping probes
+  - job_name: 'icmp-probes'
     metrics_path: /probe
     params:
       module: [icmp]
     static_configs:
       - targets:
-        - 192.168.88.1    # UPDATE: MikroTik
-        - 8.8.8.8         # Google DNS
-        - 1.1.1.1         # Cloudflare DNS
+          - 192.168.10.1    # MikroTik CRS309
+          - 192.168.10.195  # Mainsail Pi
+          - 192.168.10.196  # K8s Control Plane
+          - 192.168.10.197  # K8s Worker 1
+          - 192.168.10.198  # K8s Worker 2
+          - 192.168.10.199  # K8s Worker 3
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -59,14 +71,14 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  - job_name: 'blackbox-http'
+  # Blackbox Exporter - HTTP probes
+  - job_name: 'http-probes'
     metrics_path: /probe
     params:
       module: [http_2xx]
     static_configs:
       - targets:
-        - https://google.com
-        - https://github.com
+          - http://192.168.10.195  # Mainsail web UI
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

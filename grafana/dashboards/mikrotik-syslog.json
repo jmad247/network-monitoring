@@ -1,0 +1,203 @@
+{
+  "dashboard": {
+    "title": "MikroTik Syslog & Services",
+    "tags": ["network", "kiosk", "loki"],
+    "timezone": "browser",
+    "refresh": "5m",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Docker Services Status",
+        "type": "table",
+        "gridPos": { "h": 7, "w": 12, "x": 0, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "targets": [
+          {
+            "expr": "up",
+            "legendFormat": "{{job}} — {{instance}}",
+            "instant": true,
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "Value" },
+              "properties": [
+                { "id": "displayName", "value": "Status" },
+                { "id": "mappings", "value": [
+                  { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }
+                ]},
+                { "id": "custom.cellOptions", "value": { "type": "color-background" } }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "Time" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "__name__" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "type" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "ip" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "device" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            }
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "MikroTik Interface Status",
+        "type": "table",
+        "gridPos": { "h": 7, "w": 12, "x": 12, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "targets": [
+          {
+            "expr": "ifOperStatus{instance=\"192.168.10.1\"}",
+            "legendFormat": "{{ifName}}",
+            "instant": true,
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "Value" },
+              "properties": [
+                { "id": "displayName", "value": "Status" },
+                { "id": "mappings", "value": [
+                  { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "2": { "text": "DOWN", "color": "red" } } }
+                ]},
+                { "id": "custom.cellOptions", "value": { "type": "color-background" } }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "ifName" },
+              "properties": [
+                { "id": "displayName", "value": "Interface" }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "ifDescr" },
+              "properties": [
+                { "id": "displayName", "value": "Description" }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "Time" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "__name__" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "instance" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "job" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "device" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            },
+            {
+              "matcher": { "id": "byName", "options": "type" },
+              "properties": [{ "id": "custom.hidden", "value": true }]
+            }
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "title": "MikroTik Syslog (Live)",
+        "type": "logs",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 7 },
+        "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+        "targets": [
+          {
+            "expr": "{job=\"syslog\"}",
+            "legendFormat": ""
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "prettifyLogMessage": false,
+          "enableLogDetails": true,
+          "sortOrder": "Descending",
+          "dedupStrategy": "none"
+        }
+      },
+      {
+        "id": 4,
+        "title": "SNMP Scrape Duration",
+        "type": "timeseries",
+        "gridPos": { "h": 5, "w": 12, "x": 0, "y": 17 },
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "targets": [
+          {
+            "expr": "snmp_scrape_duration_seconds",
+            "legendFormat": "SNMP Scrape"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "unit": "s",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Prometheus Scrape Performance",
+        "type": "timeseries",
+        "gridPos": { "h": 5, "w": 12, "x": 12, "y": 17 },
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "targets": [
+          {
+            "expr": "scrape_duration_seconds",
+            "legendFormat": "{{job}} — {{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "unit": "s",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "showPoints": "never"
+            }
+          }
+        }
+      }
+    ],
+    "schemaVersion": 39
+  },
+  "overwrite": true
+}

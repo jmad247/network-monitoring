@@ -1,217 +1,112 @@
-# Network Monitoring Stack
+# Home Lab Network Monitoring Stack
 
-Enterprise-grade network monitoring solution using Prometheus, Grafana, and SNMP for MikroTik devices.
+8-service monitoring stack for a multi-VLAN home network built on a MikroTik CRS309-1G-8S+ core switch.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Docker Network                            │
-│                                                                  │
-│  ┌──────────┐   ┌──────────────┐   ┌─────────────────┐          │
-│  │ Grafana  │◄──│  Prometheus  │◄──│  SNMP Exporter  │◄── MikroTik
-│  │  :3000   │   │    :9090     │   │     :9116       │          │
-│  └──────────┘   └──────────────┘   └─────────────────┘          │
-│       │                │                                         │
-│       │                ├──────────┬─────────────────┐           │
-│       │                ▼          ▼                 ▼           │
-│       │         ┌──────────┐ ┌──────────┐   ┌─────────────┐     │
-│       │         │  Node    │ │ Blackbox │   │ Alertmanager│     │
-│       │         │ Exporter │ │ Exporter │   │   :9093     │     │
-│       │         │  :9100   │ │  :9115   │   └─────────────┘     │
-│       │         └──────────┘ └──────────┘                       │
-└───────┼─────────────────────────────────────────────────────────┘
-        │
-        ▼
-   Web Browser
+MikroTik CRS309 (UDP 1514) → rsyslog → /var/log/mikrotik.log → Promtail → Loki → Grafana
+MikroTik CRS309 (SNMP v2c) → SNMP Exporter → Prometheus → Grafana
+Host metrics → Node Exporter → Prometheus → Grafana
+ICMP/HTTP probes → Blackbox Exporter → Prometheus → Grafana
+Alert rules → Prometheus → Alertmanager → (Slack webhook)
 ```
 
-## Components
+## Services
 
-| Component | Port | Purpose |
-|-----------|------|---------|
+| Service | Port | Purpose |
+|---------|------|---------|
 | Prometheus | 9090 | Metrics collection and storage |
 | Grafana | 3000 | Visualization and dashboards |
-| SNMP Exporter | 9116 | MikroTik SNMP metrics |
-| Node Exporter | 9100 | Linux host metrics |
-| Blackbox Exporter | 9115 | Endpoint probing (ICMP, HTTP) |
+| Node Exporter | 9100 | Host system metrics |
+| SNMP Exporter | 9116 | MikroTik switch metrics via SNMP |
+| Blackbox Exporter | 9115 | ICMP ping and HTTP probes |
 | Alertmanager | 9093 | Alert routing and notifications |
+| Loki | 3100 | Log aggregation |
+| Promtail | 9080 | Log shipping (MikroTik syslog) |
+
+## Network
+
+- **Core switch:** MikroTik CRS309-1G-8S+ at 192.168.10.1
+- **VLANs:** Production (10), IoT (20), Management (40), Pentesting (50)
+- **Monitored devices:** MikroTik, 4x Raspberry Pi 5 (K8s cluster), Mainsail Pi, admin workstation
 
 ## Quick Start
 
-### 1. Configure MikroTik SNMP
-
-SSH into your MikroTik and run:
-
-```routeros
-/snmp set enabled=yes
-/snmp community add name=monitoring addresses=YOUR_DOCKER_HOST_IP/32 read-access=yes
-```
-
-### 2. Update Configuration
-
-Edit `prometheus/prometheus.yml` and update:
-- `192.168.88.1` → Your MikroTik IP address
-
-Edit `snmp-exporter/snmp.yml` and update:
-- `community: monitoring` → Your SNMP community string (if different)
-
-### 3. Deploy Stack
-
 ```bash
-cd ~/Job/Projects/network-monitoring
-docker compose up -d
-```
-
-### 4. Access Dashboards
-
-- **Grafana**: http://localhost:3000 (admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Alertmanager**: http://localhost:9093
-
-## Dashboards
-
-### Network Overview
-- MikroTik uptime
-- Device status (up/down)
-- Latency monitoring
-- Interface traffic (in/out)
-- Interface errors
-- Interface operational status
-
-### Host Metrics
-- CPU usage gauge
-- Memory usage gauge
-- Disk usage gauge
-- CPU & Memory over time
-- Network traffic per interface
-
-## Alerts
-
-Pre-configured alerts in `prometheus/alerts.yml`:
-
-| Alert | Condition | Severity |
-|-------|-----------|----------|
-| DeviceDown | ICMP probe fails for 1m | Critical |
-| HighLatency | >100ms for 5m | Warning |
-| SNMPTargetDown | SNMP unreachable for 2m | Critical |
-| HighCPUUsage | >80% for 5m | Warning |
-| HighMemoryUsage | >85% for 5m | Warning |
-| DiskSpaceLow | >85% used for 5m | Warning |
-| HighInterfaceUtilization | >800Mbps for 5m | Warning |
-| InterfaceErrors | Any errors for 5m | Warning |
-
-## Adding Alert Notifications
-
-### Discord Webhook
-
-Edit `alertmanager/alertmanager.yml`:
-
-```yaml
-receivers:
-  - name: 'critical'
-    webhook_configs:
-      - url: 'https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_TOKEN'
-        send_resolved: true
-```
-
-### Slack
-
-```yaml
-receivers:
-  - name: 'critical'
-    slack_configs:
-      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
-        channel: '#alerts'
-```
-
-## Adding More Devices
-
-### Additional MikroTik
-
-Add to `prometheus/prometheus.yml` under `snmp-mikrotik` targets:
-
-```yaml
-- targets:
-  - 192.168.88.1  # Router 1
-  - 192.168.88.2  # Router 2
-```
-
-### Linux Hosts
-
-Deploy node-exporter on remote hosts and add to prometheus:
-
-```yaml
-- job_name: 'remote-nodes'
-  static_configs:
-    - targets:
-      - '192.168.10.10:9100'
-      - '192.168.10.11:9100'
-```
-
-## Useful Commands
-
-```bash
-# Start stack
+# Start all services
 docker compose up -d
 
-# View logs
-docker compose logs -f
+# Check status
+./check-status.sh
 
-# Restart after config changes
-docker compose restart prometheus
-
-# Stop stack
-docker compose down
-
-# Full cleanup (removes data)
-docker compose down -v
+# Verify everything is healthy
+./verify-monitoring.sh
 ```
+
+## Monitored Targets
+
+**Prometheus scrape targets:**
+- Prometheus self-monitoring (localhost:9090)
+- Admin workstation via Node Exporter (node-exporter:9100)
+- MikroTik CRS309 via SNMP (192.168.10.1)
+
+**Blackbox ICMP probes:**
+- MikroTik CRS309 (192.168.10.1)
+- Mainsail Pi (192.168.10.195)
+- K8s nodes (192.168.10.196–199)
+
+**Blackbox HTTP probes:**
+- Mainsail web UI (192.168.10.195)
+
+## Alert Rules
+
+- **DeviceDown** — ICMP probe failure for 2+ minutes (critical)
+- **HTTPEndpointDown** — HTTP probe failure for 2+ minutes (warning)
+- **SNMPTargetUnreachable** — SNMP scrape failure for 2+ minutes (critical)
+- **HighCPUUsage** — CPU above 85% for 5+ minutes (warning)
+- **HighMemoryUsage** — Memory above 90% for 5+ minutes (warning)
+- **DiskSpaceLow** — Disk usage above 85% for 5+ minutes (warning)
+- **InterfaceDown** — Switch interface operationally down (warning)
+- **HighInterfaceErrors** — Interface error rate above threshold (warning)
+
+## MikroTik Syslog Pipeline
+
+MikroTik sends RFC 3164 (BSD syslog) which Promtail can't parse directly. An rsyslog relay handles the format conversion:
+
+1. MikroTik sends syslog over UDP to port 1514
+2. rsyslog receives and writes to `/var/log/mikrotik.log`
+3. Promtail tails the log file
+4. Loki stores and indexes the logs
+5. Grafana queries Loki for log visualization
+
+The `10-mikrotik.conf` file is the rsyslog config (install to `/etc/rsyslog.d/`).
 
 ## File Structure
 
 ```
-network-monitoring/
-├── docker-compose.yml
+├── docker-compose.yml                    # All 8 services
 ├── prometheus/
-│   ├── prometheus.yml      # Main config
-│   └── alerts.yml          # Alert rules
+│   ├── prometheus.yml                    # Scrape configs and targets
+│   └── alerts.yml                        # Alert rules
 ├── grafana/
 │   ├── provisioning/
-│   │   ├── datasources/
-│   │   │   └── datasources.yml
-│   │   └── dashboards/
-│   │       └── dashboards.yml
+│   │   ├── dashboards/dashboard.yml      # Dashboard auto-provisioning
+│   │   └── datasources/prometheus.yml    # Prometheus + Loki datasources
 │   └── dashboards/
-│       ├── network-overview.json
-│       └── host-metrics.json
-├── snmp-exporter/
-│   └── snmp.yml            # MikroTik SNMP config
-├── alertmanager/
-│   └── alertmanager.yml
-├── blackbox/
-│   └── blackbox.yml
-└── README.md
+│       ├── network-overview.json         # Network overview dashboard
+│       └── mikrotik-syslog.json          # MikroTik log dashboard
+├── alertmanager/alertmanager.yml         # Alert routing config
+├── blackbox/blackbox.yml                 # ICMP and HTTP probe modules
+├── configs/snmp.yml                      # SNMP v2c auth and IF-MIB OIDs
+├── loki/loki.yml                         # Loki storage and schema config
+├── promtail/promtail.yml                 # Log scrape config
+├── 10-mikrotik.conf                      # rsyslog config for MikroTik
+├── start-monitoring.sh                   # Quick start script
+├── check-status.sh                       # Health check script
+└── verify-monitoring.sh                  # Full verification script
 ```
 
-## Skills Demonstrated
+## Technologies
 
-- **Network Observability**: SNMP polling, metrics collection
-- **Infrastructure as Code**: Docker Compose, configuration management
-- **Monitoring & Alerting**: Prometheus rules, Alertmanager routing
-- **Data Visualization**: Grafana dashboards, PromQL queries
-- **Network Protocols**: SNMP v2c, ICMP, HTTP probing
-
-## Next Steps
-
-1. Add more devices to monitoring
-2. Create custom dashboards for specific use cases
-3. Set up Discord/Slack notifications
-4. Add Grafana authentication (LDAP/OAuth)
-5. Implement long-term storage (Thanos/Cortex)
-
----
-
-**Author**: Madison
-**Created**: January 2026
-**License**: MIT
+Docker Compose, Prometheus, Grafana, Loki, Promtail, Alertmanager, SNMP Exporter, Node Exporter, Blackbox Exporter, rsyslog, MikroTik RouterOS
